@@ -34,6 +34,7 @@ jobs:
         run: |
           dvc remote modify origin --local access_key_id ${{ secrets.DAGSHUB_TOKEN }}
           dvc remote modify origin --local secret_access_key ${{ secrets.DAGSHUB_TOKEN }}
+      - run: mkdir -p models reports
       - run: dvc repro
       - run: dvc push
       - run: python -m src.models.gate --candidate models/candidate.pt
