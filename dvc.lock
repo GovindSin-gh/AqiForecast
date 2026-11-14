@@ -16,7 +16,7 @@ stages:
       size: 2133995
     - path: src/features
       hash: md5
-      md5: cfa4cb5bee1024ac411527967e601f51.dir
+      md5: 830003b9ce0d41b0900f97f77f605c95.dir
       size: 18086
       nfiles: 7
     params:
@@ -77,8 +77,8 @@ stages:
       nfiles: 4
     - path: src/models
       hash: md5
-      md5: 6c69e48f18a4c7141467e63633744cbc.dir
-      size: 29103
+      md5: c9dbbf47de07e586d09864c53be457e3.dir
+      size: 29098
       nfiles: 12
     params:
       params.yaml:
@@ -95,9 +95,9 @@ stages:
     outs:
     - path: models/candidate.pt
       hash: md5
-      md5: d2ae4574a8638585995fcd1dca3f59cb
+      md5: 6afde545e920b653e5c199739386d0a2
       size: 245668
     - path: reports/metrics.json
       hash: md5
-      md5: 05b44f987a17036dc00d8077857009c2
-      size: 547
+      md5: d90fffa4983d19cfc180800646b9e7ea
+      size: 551
