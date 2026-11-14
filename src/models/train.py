@@ -24,20 +24,31 @@ def load(split):
 def main():
     P = load_params()
     T = P["train"]
-    random.seed(T["seed"]); np.random.seed(T["seed"]); torch.manual_seed(T["seed"])
+    random.seed(T["seed"])
+    np.random.seed(T["seed"])
+    torch.manual_seed(T["seed"])
     scaler = json.loads((ROOT / "data/processed/scaler.json").read_text())
     mu, sd = y_stats(scaler)
     Xtr, ctr, ytr = load("train")
     Xva, cva, yva = load("val")
-    cfg = {"n_features": len(scaler["features"]), "n_cities": len(scaler["cities"]),
-           "hidden": T["hidden"], "layers": T["layers"], "dropout": T["dropout"],
-           "emb": T["emb"], "horizons": P["features"]["horizon"]}
+    cfg = {
+        "n_features": len(scaler["features"]),
+        "n_cities": len(scaler["cities"]),
+        "hidden": T["hidden"],
+        "layers": T["layers"],
+        "dropout": T["dropout"],
+        "emb": T["emb"],
+        "horizons": P["features"]["horizon"],
+    }
     model = build_model(cfg)
     opt = torch.optim.AdamW(model.parameters(), lr=T["lr"])
 
     def tens(X, c, y):
-        return (torch.from_numpy(normalize(X, scaler)), torch.from_numpy(c.astype(np.int64)),
-                torch.from_numpy(((y - mu) / sd).astype(np.float32)))
+        return (
+            torch.from_numpy(normalize(X, scaler)),
+            torch.from_numpy(c.astype(np.int64)),
+            torch.from_numpy(((y - mu) / sd).astype(np.float32)),
+        )
 
     train_dl = DataLoader(TensorDataset(*tens(Xtr, ctr, ytr)), batch_size=T["batch_size"], shuffle=True)
     xv, cv, yv = tens(Xva, cva, yva)
@@ -47,8 +58,11 @@ def main():
     mlflow.set_experiment("aqi-lstm")
     best, best_state, bad = float("inf"), None, 0
     with mlflow.start_run() as run:
-        mlflow.log_params({**{f"train.{k}": v for k, v in T.items()},
-                           "n_train": len(Xtr), "n_val": len(Xva)})
+        mlflow.log_params({
+            **{f"train.{k}": v for k, v in T.items()},
+            "n_train": len(Xtr),
+            "n_val": len(Xva),
+        })
         for epoch in range(T["epochs"]):
             model.train()
             for x, c, y in train_dl:
@@ -70,10 +84,14 @@ def main():
                     break
         model.load_state_dict(best_state)
         m = metrics(torch_predict(model, scaler, Xva, cva), yva, Xva[:, -1, 0])
-        mlflow.log_metrics({"val_mae": m["mae"], "val_coverage": m["coverage"],
-                            "val_skill_vs_persistence": m["skill_vs_persistence"]})
-        torch.save({"state": model.state_dict(), "config": cfg}, ROOT / "models/candidate.pt")
+        mlflow.log_metrics({
+            "val_mae": m["mae"],
+            "val_coverage": m["coverage"],
+            "val_skill_vs_persistence": m["skill_vs_persistence"],
+        })
+        (ROOT / "models").mkdir(exist_ok=True)
         (ROOT / "reports").mkdir(exist_ok=True)
+        torch.save({"state": model.state_dict(), "config": cfg}, ROOT / "models/candidate.pt")
         (ROOT / "reports/metrics.json").write_text(json.dumps(m, indent=2))
         (ROOT / "reports/run.json").write_text(json.dumps({"run_id": run.info.run_id}))
         print(json.dumps(m, indent=2))
