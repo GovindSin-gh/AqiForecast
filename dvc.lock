@@ -1,0 +1,103 @@
+schema: '2.0'
+stages:
+  export:
+    cmd: python -m src.data.export
+    outs:
+    - path: data/raw/observations.parquet
+      hash: md5
+      md5: e1917200901d28668fdfea0a1d89d841
+      size: 2133995
+  features:
+    cmd: python -m src.features.build
+    deps:
+    - path: data/raw/observations.parquet
+      hash: md5
+      md5: e1917200901d28668fdfea0a1d89d841
+      size: 2133995
+    - path: src/features
+      hash: md5
+      md5: cfa4cb5bee1024ac411527967e601f51.dir
+      size: 18086
+      nfiles: 7
+    params:
+      params.yaml:
+        cities:
+        - id: delhi
+          name: Delhi
+          lat: 28.61
+          lon: 77.21
+        - id: lucknow
+          name: Lucknow
+          lat: 26.85
+          lon: 80.95
+        - id: kanpur
+          name: Kanpur
+          lat: 26.45
+          lon: 80.35
+        - id: kolkata
+          name: Kolkata
+          lat: 22.57
+          lon: 88.36
+        - id: mumbai
+          name: Mumbai
+          lat: 19.08
+          lon: 72.88
+        - id: hyderabad
+          name: Hyderabad
+          lat: 17.39
+          lon: 78.49
+        - id: chennai
+          name: Chennai
+          lat: 13.08
+          lon: 80.27
+        - id: bengaluru
+          name: Bengaluru
+          lat: 12.97
+          lon: 77.59
+        features:
+          window: 48
+          horizon: 24
+          stride: 3
+          split:
+            train: 0.7
+            val: 0.15
+    outs:
+    - path: data/processed
+      hash: md5
+      md5: e52a3a8da6479c7f3a92dc7681239299.dir
+      size: 251281917
+      nfiles: 4
+  train:
+    cmd: python -m src.models.train
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: e52a3a8da6479c7f3a92dc7681239299.dir
+      size: 251281917
+      nfiles: 4
+    - path: src/models
+      hash: md5
+      md5: 6c69e48f18a4c7141467e63633744cbc.dir
+      size: 29103
+      nfiles: 12
+    params:
+      params.yaml:
+        train:
+          hidden: 64
+          layers: 2
+          dropout: 0.1
+          emb: 8
+          batch_size: 256
+          epochs: 30
+          patience: 5
+          lr: 0.001
+          seed: 42
+    outs:
+    - path: models/candidate.pt
+      hash: md5
+      md5: d2ae4574a8638585995fcd1dca3f59cb
+      size: 245668
+    - path: reports/metrics.json
+      hash: md5
+      md5: 05b44f987a17036dc00d8077857009c2
+      size: 547
