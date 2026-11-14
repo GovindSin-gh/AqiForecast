@@ -1,0 +1,18 @@
+name: daily-openaq-validation
+on:
+  schedule:
+    - cron: "40 21 * * *"
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip}
+      - run: pip install -r requirements-ingest.txt
+      - run: python -m src.validation.openaq

@@ -1,0 +1,4 @@
+-r requirements-ingest.txt
+numpy>=1.26
+onnxruntime>=1.18
+scipy>=1.11

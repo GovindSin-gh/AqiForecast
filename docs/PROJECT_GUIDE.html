@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AQI Forecast: Project Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#E9EFF4;--ink:#1B2B3A;--mut:#44586A;--acc:#2F5D8A;--line:#B9C8D6;--paper:#F6F9FB}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:60px}
+body{margin:0;font:17px/1.65 "Atkinson Hyperlegible",system-ui,sans-serif;color:var(--ink);background:linear-gradient(180deg,#D8E5EE 0,#E9EFF4 520px)}
+h1,h2,h3{font-family:"Bricolage Grotesque","Trebuchet MS",sans-serif;line-height:1.15}
+h1{font-size:clamp(2rem,5vw,3.2rem);margin:.3em 0}h2{font-size:clamp(1.5rem,3vw,2rem);margin:0 0 .5em}h3{margin:1.4em 0 .3em}
+h2::after{content:"";display:block;width:132px;height:5px;margin-top:10px;background:linear-gradient(90deg,#3DBE6B 0 16.66%,#F2D338 0 33.33%,#F28C28 0 50%,#D93A2F 0 66.66%,#8F3F97 0 83.33%,#7E0023 0)}
+p,li,dd{max-width:68ch}a{color:var(--acc)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}section{padding:60px 0 0}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px;box-shadow:0 0 0 5px #fff}
+nav{position:sticky;top:0;z-index:5;background:var(--ink)}nav ul{display:flex;margin:0;padding:0 12px;list-style:none;overflow-x:auto}
+nav a{display:block;padding:13px 10px;color:#DCE8F1;text-decoration:none;white-space:nowrap;font-size:.92rem}nav a:hover{color:#fff;text-decoration:underline}
+.fig{background:var(--paper);border:1px solid var(--line);margin:14px 0;overflow-x:auto}.fig svg{display:block;width:100%;min-width:640px;height:auto}
+svg text{font-family:"Atkinson Hyperlegible",system-ui,sans-serif;fill:#1B2B3A}
+.scroll{overflow-x:auto;border:1px solid var(--line);background:var(--paper);margin:14px 0}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:.95rem}th,td{padding:.5em .8em;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}thead th{background:#D3DFE9}tbody th{font-weight:700}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em;background:#D3DFE9;padding:0 .3em}
+.note{border-left:4px solid #F28C28;padding:2px 0 2px 12px;margin:14px 0}
+.lgd{display:flex;gap:16px;flex-wrap:wrap;font-size:.9rem}.lgd i{display:inline-block;width:14px;height:14px;margin-right:6px;vertical-align:-2px;border:1px solid var(--ink)}
+.tree summary{cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700}.tree details{margin-left:18px}.tree>details{margin-left:0}.tree .f{margin-left:36px;font-size:.95rem}.tree .f code{background:none;font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.card{border-top:4px solid #2A7F9E;background:var(--paper);padding:8px 12px;font-size:.92rem}.card b{font-family:"Bricolage Grotesque",sans-serif;font-size:1.05rem}.card div{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem}
+footer{padding:50px 0;color:var(--mut)}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<nav aria-label="Sections"><ul id="nav"></ul></nav>
+<main class="wrap">
+<section id="overview" style="padding-top:44px">
+ <h1>AQI Forecast: how the whole project works</h1>
+ <p>The system predicts PM2.5 (tiny dust particles) and the AQI (Air Quality Index, a 0–500 health score) for the next hour and the next 24 hours in eight Indian cities. It fetches fresh data every hour, grades its own past forecasts, retrains every day, and only swaps in a new model if it is truly better.</p>
+ <p>Think of a restaurant kitchen that stays open: ingredients arrive hourly, every dish is tasted afterwards, and a new recipe only goes on the menu after it beats the old one in a blind test.</p>
+ <div class="note"><strong>Honest limits.</strong> The air values come from Open-Meteo’s computer models, not from sensors at your street. OpenAQ ground stations are used to check how far off those values are. The forecasts are estimates with uncertainty bands.</div>
+ <h3>The pieces at a glance</h3>
+ <div class="scroll"><div id="t-pieces"></div></div>
+</section>
+
+<section id="big">
+ <h2>The big picture</h2>
+ <p>Three layers: data comes in, models are made and checked, and results are served to people. Training reads the DVC snapshot, so every model can be traced to the exact data behind it.</p>
+ <div class="fig"><svg id="arch" viewBox="0 0 1000 560" role="img" aria-label="System architecture flowchart"></svg></div>
+ <div class="lgd"><span><i style="background:#CFE6EF"></i>Data layer</span><span><i style="background:#E0DBF1"></i>Model layer</span><span><i style="background:#F6E2C5"></i>Serving layer</span></div>
+</section>
+
+<section id="loops">
+ <h2>The loops that run by themselves</h2>
+ <h3>Hourly: collect, predict, score</h3>
+ <p>Each hour GitHub Actions fetches new readings (<code>ingest.yml</code>), makes forecasts with the live model, grades older forecasts against what really happened, and checks for drift (<code>monitor.yml</code>). If the rolling error stays above 1.3 times normal for 3 hourly checks, an extra retrain starts and a message is sent to your webhook.</p>
+ <div class="fig"><svg id="hour" viewBox="0 0 760 180" role="img" aria-label="Hourly loop"></svg></div>
+ <h3>Daily: retrain, compare, promote or reject</h3>
+ <p>At 02:00 India time <code>retrain.yml</code> exports the data, builds time-split windows, trains a candidate, and runs the gate. A rejection is a normal outcome and changes nothing for users.</p>
+ <div class="fig"><svg id="day" viewBox="0 0 760 210" role="img" aria-label="Daily loop"></svg></div>
+</section>
+
+<section id="model">
+ <h2>From raw rows to a forecast</h2>
+ <div class="fig"><svg id="pipe" viewBox="0 0 960 240" role="img" aria-label="Model data pipeline"></svg></div>
+ <p>The model reads the last 48 hours of 13 signals (PM2.5, PM10, weather, wind direction as sine and cosine, and time of day and year) plus a learned vector for the city. It writes 24 hours ahead as three lines: a low (10th percentile), middle (50th) and high (90th) guess. Eight times out of ten the real value should land between low and high.</p>
+ <div class="fig"><svg id="fan" viewBox="0 0 760 260" role="img" aria-label="Illustration of a forecast with a widening uncertainty band"></svg></div>
+ <p class="note">Illustration only, not real data. The band widens because far-ahead forecasts are less certain.</p>
+ <p>Windows are split by time: oldest 70% trains, next 15% tunes, newest 15% tests. Windows that straddle a boundary are dropped, so no future information leaks into training. Scaling numbers come from the training part only.</p>
+</section>
+
+<section id="gate">
+ <h2>The promotion gate</h2>
+ <p>Both the candidate and the live model are scored on the same held-out test windows. The candidate is promoted only if every rule passes (thresholds live in <code>params.yaml</code>).</p>
+ <div class="fig"><svg id="gateSvg" viewBox="0 0 760 210" role="img" aria-label="Promotion gate flow"></svg></div>
+ <div class="scroll"><div id="t-gate"></div></div>
+ <p>On promotion the ONNX file and scaler are stored in the database and the old model is archived. <code>python -m src.models.rollback</code> puts the previous one back.</p>
+</section>
+
+<section id="explain">
+ <h2>The “Explain this forecast” button</h2>
+ <p>The LSTM owns the number. Qwen (through ChatGroq) only narrates it, and a guard checks the words.</p>
+ <div class="fig"><svg id="llm" viewBox="0 0 900 190" role="img" aria-label="Explain guardrail flow"></svg></div>
+ <p>If the AI text contains any number that was not in the data, or the AI service is unavailable, the app shows a plain template sentence instead. Requests are rate-limited and cached to protect the free quota.</p>
+</section>
+
+<section id="validation">
+ <h2>Checking against real stations (OpenAQ)</h2>
+ <div class="fig"><svg id="val" viewBox="0 0 1000 180" role="img" aria-label="OpenAQ validation flow"></svg></div>
+ <p>Once a day, nearby PM2.5 stations are averaged per hour and compared with the model-based values we hold for the same hours. The Model health page shows the average gap, bias and correlation per city. This only measures trust. It never trains the model.</p>
+</section>
+
+<section id="request">
+ <h2>What happens when someone opens a city page</h2>
+ <div class="fig"><svg id="req" viewBox="0 0 1000 250" role="img" aria-label="Request lifecycle"></svg></div>
+ <p>The browser loads the static React site from Vercel. The site calls the Render API, which reads the last 48 hours from Supabase, runs the ONNX model in memory, and returns percentile values converted to AQI. Responses are cached for a minute.</p>
+</section>
+
+<section id="structure">
+ <h2>Repository map</h2>
+ <p>Open a folder to see its files.</p>
+ <div class="tree" id="tree"></div>
+</section>
+
+<section id="data">
+ <h2>Database tables</h2>
+ <div class="cards" id="cards"></div>
+ <p>Relations: a city has many <code>observations</code>, <code>forecasts</code> and <code>ground_truth</code> rows. Each forecast names its <code>model_version</code>, which links to <code>model_runs</code> and its stored artifact. <code>scores</code> join a forecast to the observation for its target hour. Row level security is on, and the app reaches Postgres directly.</p>
+</section>
+
+<section id="ops">
+ <h2>Where everything runs and what it needs</h2>
+ <div class="scroll"><div id="t-run"></div></div>
+ <h3>Secrets and settings map</h3>
+ <div class="scroll"><div id="t-sec"></div></div>
+ <p class="note">Free tiers change. Render may sleep idle services, Supabase may pause inactive projects, GitHub schedules can start late. Check each provider’s current docs. Step-by-step instructions are in <code>SETUP.md</code>.</p>
+</section>
+
+<section id="gloss">
+ <h2>Glossary</h2>
+ <dl id="gl"></dl>
+</section>
+<footer><p>Project guide for the AQI Forecast repository.</p></footer>
+</main>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+[['overview','Overview'],['big','Big picture'],['loops','Loops'],['model','Model'],['gate','Gate'],['explain','Explain'],['validation','OpenAQ'],['request','Request'],['structure','Repo'],['data','Tables'],['ops','Hosting'],['gloss','Glossary']]
+ .forEach(([i,t])=>$('#nav').insertAdjacentHTML('beforeend','<li><a href="#'+i+'">'+t+'</a></li>'));
+function tbl(id,head,rows){$('#'+id).innerHTML='<table><thead><tr>'+head.map(x=>'<th scope="col">'+x+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((c,i)=>i?'<td>'+c+'</td>':'<th scope="row">'+c+'</th>').join('')+'</tr>').join('')+'</tbody></table>'}
+tbl('t-pieces',['Piece','Job','Tool'],[
+ ['Data source','Hourly air quality and weather','Open-Meteo APIs (no key)'],
+ ['Ground check','Compare with real stations','OpenAQ API (free key)'],
+ ['Database','Readings, forecasts, scores, models','Supabase Postgres'],
+ ['Automation','Ingest, monitor, retrain, validate','GitHub Actions'],
+ ['Data and experiments','Versioned data, run history','DVC + MLflow on DagsHub'],
+ ['Model','48 h in, 24 h out, 10/50/90 percentiles','PyTorch LSTM, exported to ONNX'],
+ ['API','Forecasts, health, explain','FastAPI + ONNX Runtime on Render'],
+ ['Explain','Plain-language narration','Qwen via ChatGroq (Groq)'],
+ ['Website','Map, city page, model health','React (Vite) + Leaflet on Vercel']]);
+tbl('t-gate',['Rule','Plain meaning'],[
+ ['Overall error at least 2% better','The new model must be clearly better, not just different'],
+ ['No horizon more than 5% worse','No hidden weakness at 1, 6, 12 or 24 hours'],
+ ['Coverage 75–85%','The low–high band should catch the truth about 8 times in 10'],
+ ['Beats the persistence baseline','Must beat “tomorrow equals now”'],
+ ['First model','Only the baseline and coverage rules apply']]);
+tbl('t-run',['What','Runs on','Needs'],[
+ ['Hourly ingest, monitor; daily retrain, validation; backfill','GitHub Actions','GitHub secrets'],
+ ['API','Render (free web service)','Render environment variables'],
+ ['Website','Vercel','<code>VITE_API_URL</code>'],
+ ['Database','Supabase','Session pooler connection string'],
+ ['Data versions and experiments','DagsHub','Token and MLflow address'],
+ ['Explain model','Groq','<code>GROQ_API_KEY</code>']]);
+tbl('t-sec',['Name','Where to set it','Comes from'],[
+ ['SUPABASE_DB_URL','GitHub secret + Render','Supabase, session pooler string'],
+ ['DAGSHUB_USER / DAGSHUB_TOKEN','GitHub secrets','DagsHub account and token'],
+ ['MLFLOW_TRACKING_URI','GitHub secret','https://dagshub.com/USER/REPO.mlflow'],
+ ['OPENAQ_API_KEY','GitHub secret','OpenAQ account'],
+ ['GROQ_API_KEY, GROQ_MODEL','Render','Groq console'],
+ ['ALLOWED_ORIGINS','Render','Your exact Vercel URL'],
+ ['VITE_API_URL','Vercel','Your Render URL'],
+ ['ALERT_WEBHOOK_URL (optional)','GitHub secret','Discord or Slack webhook']]);
+
+let fid=0;
+const FILL={d:['#CFE6EF','#2A7F9E'],m:['#E0DBF1','#6B5CA5'],s:['#F6E2C5','#C77A1E']};
+function flow(id,nodes,arrows,bands){
+ const a='ah'+(fid++);
+ let o='<defs><marker id="'+a+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1B2B3A"/></marker></defs>';
+ (bands||[]).forEach(b=>{o+='<rect x="6" y="'+b.y+'" width="988" height="'+b.h+'" fill="'+FILL[b.k][0]+'" opacity=".4" stroke="'+FILL[b.k][1]+'" stroke-dasharray="4 4"/><text x="16" y="'+(b.y+18)+'" font-size="13" font-weight="700">'+b.t+'</text>';});
+ arrows.forEach(r=>{
+  o+=(r.d?'<path d="'+r.d+'"':'<line x1="'+r.p[0]+'" y1="'+r.p[1]+'" x2="'+r.p[2]+'" y2="'+r.p[3]+'"')+' fill="none" stroke="#1B2B3A" stroke-width="1.8" marker-end="url(#'+a+')"/>';
+  o+='<text x="'+r.l[0]+'" y="'+r.l[1]+'" font-size="11" text-anchor="'+(r.l[2]||'middle')+'">'+r.t+'</text>';});
+ nodes.forEach(n=>{
+  const ls=n.t.split('\n'),y0=n.y+n.h/2-(ls.length-1)*8+4;
+  o+='<rect x="'+n.x+'" y="'+n.y+'" width="'+n.w+'" height="'+n.h+'" rx="6" fill="'+FILL[n.k][0]+'" stroke="'+FILL[n.k][1]+'" stroke-width="2"/>'+ls.map((l,i)=>'<text x="'+(n.x+n.w/2)+'" y="'+(y0+i*16)+'" font-size="13" text-anchor="middle">'+l+'</text>').join('');});
+ $('#'+id).innerHTML=o;
+}
+const B=(x,y,t,k,w=180,h=54)=>({x,y,w,h,t,k});
+flow('arch',[B(20,40,'Open-Meteo\nAPIs','d'),B(280,40,'Hourly ingest\n(GitHub Actions)','d'),B(540,40,'Supabase\nPostgres','d'),B(800,40,'DVC snapshots\n(DagsHub)','d'),
+ B(540,240,'Hourly predict\n+ score','m'),B(280,240,'Rolling error\n(24 h MAE)','m'),B(20,240,'Alert if error\ntoo high','m'),
+ B(20,370,'Daily retrain\n(PyTorch)','m'),B(280,370,'Promotion gate','m'),B(540,370,'Model stored\n(DB + MLflow)','m'),
+ B(540,477,'FastAPI on Render\n(ONNX Runtime)','s'),B(800,477,'Vercel app\n(map + charts)','s')],
+ [{p:[200,67,280,67],t:'fetch',l:[240,60]},{p:[460,67,540,67],t:'rows',l:[500,60]},{p:[720,67,800,67],t:'export',l:[760,60]},
+  {p:[630,94,630,240],t:'latest 48 h',l:[640,170,'start']},{p:[540,267,460,267],t:'scores',l:[500,260]},{p:[280,267,200,267],t:'too high?',l:[240,260]},
+  {p:[110,294,110,370],t:'triggers',l:[120,336,'start']},{p:[200,397,280,397],t:'candidate',l:[240,390]},{p:[460,397,540,397],t:'if better',l:[500,390]},
+  {p:[630,424,630,477],t:'load ONNX',l:[640,447,'start']},{p:[720,504,800,504],t:'JSON',l:[760,497]}],
+ [{y:10,h:115,k:'d',t:'Data layer'},{y:135,h:315,k:'m',t:'Model layer'},{y:460,h:92,k:'s',t:'Serving layer'}]);
+flow('hour',[B(20,40,'Collect\nlatest readings','d',190,70),B(285,40,'Predict\nnext 24 hours','m',190,70),B(550,40,'Score\nold forecasts\nvs reality','m',190,70)],
+ [{p:[210,75,285,75],t:'then',l:[247,68]},{p:[475,75,550,75],t:'then',l:[512,68]},{d:'M645 110 V148 H115 V110',t:'next hour: repeat',l:[380,168]}]);
+flow('day',[B(20,70,'Retrain on\nfresh data','m',170,60),B(255,70,'Compare with\ncurrent model','m',190,60),B(540,20,'Promote to\nProduction','m',190,60),B(540,130,'Reject,\nkeep current model','m',190,60)],
+ [{p:[190,100,255,100],t:'candidate',l:[222,93]},{d:'M445 90 H490 V50 H540',t:'passes',l:[484,44,'end']},{d:'M445 110 H490 V160 H540',t:'fails',l:[484,178,'end']}]);
+flow('pipe',[B(20,30,'Raw rows\n(Supabase export)','d',200,60),B(380,30,'Hourly grid\n(gaps up to 3 h filled)','d',200,60),B(740,30,'13 features\n(weather, wind, time)','d',200,60),
+ B(740,150,'48 h windows\n(split by time)','m',200,60),B(380,150,'Quantile LSTM\n(p10, p50, p90)','m',200,60),B(20,150,'ONNX file\n(parity checked)','m',200,60)],
+ [{p:[220,60,380,60],t:'hourly grid',l:[300,53]},{p:[580,60,740,60],t:'add features',l:[660,53]},{p:[840,90,840,150],t:'slice 48 h',l:[850,125,'start']},
+  {p:[740,180,580,180],t:'train',l:[660,173]},{p:[380,180,220,180],t:'export',l:[300,173]}]);
+flow('gateSvg',[B(20,70,'Candidate\nmodel','m',170,60),B(255,70,'Score both on\nthe same test windows','m',200,60),B(540,20,'Promote\nstore + archive old','m',200,60),B(540,130,'Reject\nlog the reasons','m',200,60)],
+ [{p:[190,100,255,100],t:'new',l:[222,93]},{d:'M455 90 H495 V50 H540',t:'all rules pass',l:[490,44,'end']},{d:'M455 110 H495 V160 H540',t:'a rule fails',l:[490,178,'end']}]);
+flow('llm',[B(20,70,'Forecast numbers\n(from the LSTM)','m',170,60),B(250,70,'Qwen via\nChatGroq','s',170,60),B(480,70,'Number check','s',150,60),B(720,20,'Show AI text','s',150,60),B(720,120,'Show template\nsentence','s',150,60)],
+ [{p:[190,100,250,100],t:'facts',l:[220,93]},{p:[420,100,480,100],t:'text',l:[450,93]},{d:'M630 90 H675 V50 H720',t:'known numbers',l:[670,44,'end']},{d:'M630 110 H675 V150 H720',t:'invented number',l:[670,168,'end']}]);
+flow('val',[B(20,60,'OpenAQ API\n(ground stations)','d',140,60),B(230,60,'Daily job\nvalidate.yml','d',140,60),B(440,60,'Supabase\nground_truth','d',140,60),B(650,60,'Compare with\nmodel values','m',140,60),B(860,60,'Model health\npage','s',130,60)],
+ [{p:[160,90,230,90],t:'fetch',l:[195,83]},{p:[370,90,440,90],t:'hourly avg',l:[405,83]},{p:[580,90,650,90],t:'join',l:[615,83]},{p:[790,90,860,90],t:'report',l:[825,83]}]);
+flow('req',[B(20,30,'Browser','s',140,54),B(230,30,'Vercel\nReact site','s',140,54),B(440,30,'Render\nFastAPI','s',140,54),B(650,30,'Supabase\nlast 48 h','d',140,54),B(440,150,'ONNX model\n(in memory)','m',140,54),B(860,30,'JSON\nforecast','s',110,54)],
+ [{p:[160,57,230,57],t:'opens',l:[195,50]},{p:[370,57,440,57],t:'API call',l:[405,50]},{p:[580,57,650,57],t:'read',l:[615,50]},{p:[510,84,510,150],t:'predict',l:[520,122,'start']},
+  {d:'M580 177 H850 V84',t:'percentiles to AQI, back to the page',l:[720,170]}]);
+(function(){
+ let o='';const X=i=>40+i*(680/24),Y=v=>220-v*1.3;
+ const f=[],lo=[],hi=[];
+ for(let i=0;i<=24;i++){const m=100+25*Math.sin(i/4),w=6+i*1.6;f.push([X(i),Y(m)]);lo.push([X(i),Y(m-w)]);hi.push([X(i),Y(m+w)]);}
+ o+='<line x1="40" y1="220" x2="720" y2="220" stroke="#44586A"/><text x="40" y="242" font-size="12">now</text><text x="700" y="242" font-size="12">+24 h</text>';
+ o+='<polygon points="'+hi.concat(lo.slice().reverse()).map(p=>p.join(',')).join(' ')+'" fill="#2F5D8A" opacity=".28"/>';
+ o+='<polyline fill="none" stroke="#2F5D8A" stroke-width="2.5" points="'+f.map(p=>p.join(',')).join(' ')+'"/>';
+ o+='<text x="560" y="40" font-size="12">high guess (90th percentile)</text><text x="560" y="145" font-size="12">middle guess (median)</text><text x="560" y="215" font-size="12" style="display:none">x</text><text x="40" y="20" font-size="12">AQI</text>';
+ $('#fan').innerHTML=o;
+})();
+const TREE=[
+['.github/workflows/','Automation robots',[['ci.yml','Lint, tests, and a website build on every push'],['ingest.yml','Hourly: Open-Meteo to Supabase'],['monitor.yml','Hourly: predict, score, drift, extra retrain on alert'],['retrain.yml','Daily: export, features, train, gate, push data versions'],['backfill.yml','Manual: load history'],['validate.yml','Daily: OpenAQ ground-truth check']]],
+['db/','',[['schema.sql','All tables, safe to run again']]],
+['src/','Python code',[['common.py','Settings, DB connection, alert webhook'],['ingest/open_meteo.py','Fetch, upsert, backfill'],['data/export.py','Database to parquet for DVC'],['features/aqi.py','PM2.5 to AQI table'],['features/transform.py','Shared feature code (training and serving)'],['features/build.py','Time-split windows and scaler'],['models/lstm.py','Model and quantile loss'],['models/train.py','Training with MLflow logging'],['models/metrics.py','MAE, RMSE, coverage, category accuracy'],['models/promotion.py','The gate rules'],['models/gate.py','Compare, promote or reject'],['models/export_onnx.py','ONNX export with parity check'],['models/rollback.py','Restore the previous model'],['serving/predictor.py','ONNX runner'],['serving/store.py','Shared database reads'],['monitoring/predict.py','Hourly forecasts'],['monitoring/score.py','Grades forecasts, sets status, alerts'],['monitoring/drift.py','Drift check'],['validation/openaq.py','Ground-truth comparison']]],
+['api/','FastAPI service',[['main.py','Endpoints, caching, CORS, limits'],['explain.py','Qwen narration with number guard'],['db.py','Connection pool'],['ratelimit.py','Protects the free LLM quota']]],
+['web/','React (Vite) site',[['src/pages/MapPage.jsx','Map screen'],['src/pages/CityPage.jsx','Chart, badge, explain button'],['src/pages/HealthPage.jsx','Model health and OpenAQ table'],['src/components/','Chart, Badge, ExplainButton, Status'],['vercel.json','Routing and security headers']]],
+['scripts/','',[['init_db.py','Create tables'],['check_setup.py','Preflight checker']]],
+['tests/','Automated checks',[['test_gate.py','Gate rules'],['test_features.py','Windows, gaps, AQI'],['test_explain.py','Number guard'],['test_openaq.py','OpenAQ parsing'],['test_ratelimit.py','Rate limiter']]],
+['params.yaml','Cities, window, thresholds'],['dvc.yaml','Pipeline recipe'],['render.yaml','API hosting settings'],['SETUP.md','Step-by-step to go live'],['.env.example','Names of keys, never values']];
+const nh=n=>n.length===3?'<details><summary>'+n[0]+'</summary>'+(n[1]?'<div class="f" style="margin-left:18px">'+n[1]+'</div>':'')+n[2].map(nh).join('')+'</details>':'<div class="f"><code>'+n[0]+'</code> '+n[1]+'</div>';
+$('#tree').innerHTML='<details open><summary>aqi-forecast/</summary>'+TREE.map(nh).join('')+'</details>';
+[['cities','id PK, name, lat, lon'],['observations','city_id, ts, pm25, pm10, weather columns'],['benchmark_forecasts','Open-Meteo’s own forecast, saved at ingest'],['ground_truth','OpenAQ hourly average per city'],['forecasts','city_id, issued_at, horizon_h, p10, p50, p90, model_version'],['scores','forecast error per target hour'],['model_runs','version, stage, mae, coverage, metrics'],['model_artifacts','ONNX file and scaler per version'],['monitor_log','hourly ratio, status, drift flag'],['validation_log','OpenAQ gap, bias, correlation']]
+ .forEach(c=>$('#cards').insertAdjacentHTML('beforeend','<div class="card"><b>'+c[0]+'</b><div>'+c[1]+'</div></div>'));
+const GL=[['AQI','Air Quality Index, 0–500 health score.'],['PM2.5','Dust particles under 2.5 micrometres across.'],['Quantile / percentile','The 10th, 50th and 90th lines: low, middle and high guesses.'],['LSTM','Long short-term memory network, built for sequences.'],['ONNX','Portable model file format.'],['MAE','Mean absolute error: average size of mistakes.'],['Persistence baseline','“The future equals now.” The model must beat it.'],['Coverage','How often reality lands inside the low–high band.'],['Drift','Today’s data looks unlike the training data.'],['DVC','Data Version Control: Git-like history for data.'],['MLflow','Experiment log and model tracking.'],['Promotion gate','Automatic checks before a model goes live.'],['Ground truth','Readings from real stations, here from OpenAQ.'],['CORS','Browser rule about which sites may call the API.'],['Session pooler','Supabase connection mode that works over IPv4.']];
+$('#gl').innerHTML=GL.map(g=>'<dt style="font-weight:700;margin-top:.7em">'+g[0]+'</dt><dd style="margin:0">'+g[1]+'</dd>').join('');
+</script>
+</body>
+</html>

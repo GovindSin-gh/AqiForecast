@@ -1,0 +1,28 @@
+stages:
+  export:
+    cmd: python -m src.data.export
+    always_changed: true
+    outs:
+      - data/raw/observations.parquet
+  features:
+    cmd: python -m src.features.build
+    deps:
+      - src/features
+      - data/raw/observations.parquet
+    params:
+      - cities
+      - features
+    outs:
+      - data/processed
+  train:
+    cmd: python -m src.models.train
+    deps:
+      - src/models
+      - data/processed
+    params:
+      - train
+    outs:
+      - models/candidate.pt
+    metrics:
+      - reports/metrics.json:
+          cache: false

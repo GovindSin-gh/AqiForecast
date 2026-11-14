@@ -1,0 +1,22 @@
+name: hourly-ingest
+on:
+  schedule:
+    - cron: "7 * * * *"      # scheduled runs can start late; that is normal
+  workflow_dispatch:
+concurrency: {group: ingest, cancel-in-progress: false}
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip}
+      - run: pip install -r requirements-ingest.txt
+      - run: python -m src.ingest.open_meteo
+      - name: Notify on failure
+        if: failure() && env.ALERT_WEBHOOK_URL != ''
+        run: curl -s -X POST -H 'Content-Type: application/json' -d '{"content":"AQI ingest failed. Check the Actions tab.","text":"AQI ingest failed. Check the Actions tab."}' "$ALERT_WEBHOOK_URL"
