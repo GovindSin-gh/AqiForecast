@@ -1,11 +1,17 @@
 name: daily-retrain
+
 on:
   schedule:
-    - cron: "30 20 * * *"     # 02:00 IST (cron is UTC)
+    - cron: "30 20 * * *"   # 02:00 IST (cron is UTC)
   workflow_dispatch:
+
 permissions:
   contents: write
-concurrency: {group: retrain, cancel-in-progress: false}
+
+concurrency:
+  group: retrain
+  cancel-in-progress: false
+
 jobs:
   retrain:
     runs-on: ubuntu-latest
@@ -19,7 +25,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.11", cache: pip}
+        with:
+          python-version: "3.11"
+          cache: pip
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r requirements.txt
       - name: Configure DVC remote (DagsHub, S3-compatible)
@@ -37,4 +45,7 @@ jobs:
           git diff --cached --quiet || (git commit -m "chore: update dvc.lock [skip ci]" && git push)
       - name: Notify on failure
         if: failure() && env.ALERT_WEBHOOK_URL != ''
-        run: curl -s -X POST -H 'Content-Type: application/json' -d '{"content":"AQI retrain failed. Check the Actions tab.","text":"AQI retrain failed. Check the Actions tab."}' "$ALERT_WEBHOOK_URL"
+        run: |
+          curl -s -X POST -H 'Content-Type: application/json' \
+            -d '{"content":"AQI retrain failed. Check the Actions tab.","text":"AQI retrain failed. Check the Actions tab."}' \
+            "$ALERT_WEBHOOK_URL"
