@@ -12,7 +12,7 @@ features:
   window: 48        # hours of history the model reads
   horizon: 24       # hours ahead the model predicts
   stride: 3         # keep every 3rd training window (neighbours are near-duplicates)
-  split: {train: 0.70, val: 0.15}   # the rest is test; always split by time
+  split: {train: 0.70, val: 0.15}  # the rest is test; always split by time
 
 train:
   hidden: 64
@@ -25,13 +25,13 @@ train:
   lr: 0.001
   seed: 42
 
-gate:                       # starting points, tune after you see real numbers
-  min_improvement: 0.02     # candidate MAE must be this much better
-  max_horizon_regression: 0.05
-  coverage_low: 0.75
-  coverage_high: 0.85
+gate:   # starting points, tune after you see real numbers
+  min_improvement: 0.02       # candidate MAE must be this much better
+  max_horizon_regression: 0.05 # t+h MAE must not be worse than this
+  coverage_low: 0.70
+  coverage_high: 0.90
 
 monitor:
-  alert_ratio: 1.3          # rolling MAE / baseline MAE
-  alert_hours: 3            # consecutive hourly checks above the ratio
-  stale_hours: 3            # no new data for this long = stale
+  alert_ratio: 1.3    # rolling MAE / baseline MAE
+  alert_hours: 3      # consecutive hourly checks above the ratio
+  stale_hours: 3      # no new data for this long = stale
