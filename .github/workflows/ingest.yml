@@ -15,10 +15,6 @@ jobs:
     timeout-minutes: 10
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
-      # Add any DVC / MLflow secrets here if open_meteo uses them:
-      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,11 +26,3 @@ jobs:
       - run: pip install -r requirements-ingest.txt
 
       - run: python -m src.ingest.open_meteo
-
-      - name: Notify on failure
-        if: failure() && secrets.ALERT_WEBHOOK_URL != ''
-        run: |
-          curl -s -X POST \
-            -H 'Content-Type: application/json' \
-            -d '{"content":"AQI ingest failed. Check the Actions tab.","text":"AQI ingest failed. Check the Actions tab."}' \
-            "$ALERT_WEBHOOK_URL"
