@@ -1,16 +1,18 @@
 """Fetch air quality + weather from Open-Meteo and upsert into Supabase.
 
-python -m src.ingest.open_meteo                       # hourly job: last 2 days
+python -m src.ingest.open_meteo                       # hourly job: last 1 day
 python -m src.ingest.open_meteo --backfill-start 2024-01-01
 """
 import argparse
 import datetime as dt
 import socket
 import sys
+import time
 
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
+import urllib3
 import urllib3.util.connection as urllib3_cn
 from urllib3.util.retry import Retry
 
@@ -32,15 +34,17 @@ WX_RENAME = {"temperature_2m": "temp_c", "relative_humidity_2m": "rh",
 OBS_COLS = ["pm25", "pm10", "us_aqi", "temp_c", "rh", "wind_ms",
             "wind_dir", "pressure_hpa", "rain_mm"]
 
+REQUEST_TIMEOUT = urllib3.Timeout(connect=15.0, read=90.0)
+
 
 def _create_session() -> requests.Session:
     session = requests.Session()
     retry = Retry(
-        total=4,
-        connect=4,
-        read=4,
-        status=4,
-        backoff_factor=2,  # 2s, 4s, 8s, 16s
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        backoff_factor=2,  # 2s, 4s, 8s
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"],
         raise_on_status=False,
@@ -62,11 +66,10 @@ def _hourly_batch(
         "longitude": ",".join(str(c["lon"]) for c in cities),
         **extra_params,
     }
-    r = session.get(url, params=params, timeout=(10, 60))
+    r = session.get(url, params=params, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
     payload = r.json()
 
-    # Open-Meteo returns a single dict for 1 location, or a list of dicts for multiple.
     items = [payload] if isinstance(payload, dict) else payload
     if len(items) != len(cities):
         raise RuntimeError(f"Expected {len(cities)} responses from {url}, got {len(items)}")
@@ -92,16 +95,16 @@ def _build_recent_frames(aq: pd.DataFrame, wx: pd.DataFrame):
     return obs, bench, now
 
 
-def fetch_recent(city: dict, past_days: int = 2):
-    session = _create_session()
+def fetch_recent(city: dict, past_days: int = 1, session: requests.Session | None = None):
+    sess = session or _create_session()
     base = {"timezone": "UTC"}
     aq = _hourly_batch(
-        session, AQ_URL, [city],
+        sess, AQ_URL, [city],
         {**base, "hourly": AQ_VARS, "past_days": past_days, "forecast_days": 2},
         AQ_RENAME,
     )[city["id"]]
     wx = _hourly_batch(
-        session, WX_URL, [city],
+        sess, WX_URL, [city],
         {**base, "hourly": WX_VARS, "past_days": past_days, "forecast_days": 1, "wind_speed_unit": "ms"},
         WX_RENAME,
     )[city["id"]]
@@ -144,6 +147,30 @@ def upsert_bench(cur, city_id: str, issued: pd.Timestamp, bench: pd.DataFrame):
                     "values (%s, %s, %s, %s) on conflict do nothing", rows)
 
 
+def _fetch_all_recent(session: requests.Session, cities: list[dict]):
+    base = {"timezone": "UTC"}
+    try:
+        aq_by_id = _hourly_batch(
+            session, AQ_URL, cities,
+            {**base, "hourly": AQ_VARS, "past_days": 1, "forecast_days": 2},
+            AQ_RENAME,
+        )
+        wx_by_id = _hourly_batch(
+            session, WX_URL, cities,
+            {**base, "hourly": WX_VARS, "past_days": 1, "forecast_days": 1, "wind_speed_unit": "ms"},
+            WX_RENAME,
+        )
+        return {cid: _build_recent_frames(aq_by_id[cid], wx_by_id[cid]) for cid in aq_by_id}
+    except Exception as e:
+        print(f"Batch fetch timed out ({e}), falling back to per-city fetch...", file=sys.stderr)
+        results = {}
+        for idx, c in enumerate(cities):
+            if idx > 0:
+                time.sleep(0.5)
+            results[c["id"]] = fetch_recent(c, past_days=1, session=session)
+        return results
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--backfill-start", help="YYYY-MM-DD; fetch history in 30-day chunks")
@@ -152,22 +179,13 @@ def main() -> int:
     session = _create_session()
     failures = []
 
-    try:
-        if not args.backfill_start:
-            base = {"timezone": "UTC"}
-            aq_by_id = _hourly_batch(
-                session, AQ_URL, cities,
-                {**base, "hourly": AQ_VARS, "past_days": 2, "forecast_days": 2},
-                AQ_RENAME,
-            )
-            wx_by_id = _hourly_batch(
-                session, WX_URL, cities,
-                {**base, "hourly": WX_VARS, "past_days": 2, "forecast_days": 1, "wind_speed_unit": "ms"},
-                WX_RENAME,
-            )
-    except Exception as e:
-        print(f"FAILED batch fetch: {e}", file=sys.stderr)
-        return 1
+    recent_cache = {}
+    if not args.backfill_start:
+        try:
+            recent_cache = _fetch_all_recent(session, cities)
+        except Exception as e:
+            print(f"FAILED recent fetch: {e}", file=sys.stderr)
+            return 1
 
     with connect() as conn, conn.cursor() as cur:
         cur.executemany("insert into cities (id, name, lat, lon) values (%s, %s, %s, %s) "
@@ -186,7 +204,7 @@ def main() -> int:
                         print(f"{c['id']} {d}..{d2}: {n} rows")
                         d = d2 + dt.timedelta(days=1)
                 else:
-                    obs, bench, now = _build_recent_frames(aq_by_id[c["id"]], wx_by_id[c["id"]])
+                    obs, bench, now = recent_cache[c["id"]]
                     n = upsert_obs(cur, c["id"], obs)
                     upsert_bench(cur, c["id"], now, bench)
                     conn.commit()
