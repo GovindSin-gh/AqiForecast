@@ -2,7 +2,7 @@ name: hourly-ingest
 
 on:
   schedule:
-    - cron: "7 * * * *"     # scheduled runs can start late; that is normal
+    - cron: "7 * * * *"      # scheduled runs can start late; that is normal
   workflow_dispatch:
 
 concurrency:
@@ -23,6 +23,11 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - run: pip install -r requirements-ingest.txt
+      - name: Install dependencies
+        run: pip install -r requirements-ingest.txt
 
-      - run: python -m src.ingest.open_meteo
+      - name: Run Open-Meteo ingest
+        timeout-minutes: 3
+        run: |
+          sleep $((RANDOM % 25))
+          python -m src.ingest.open_meteo
