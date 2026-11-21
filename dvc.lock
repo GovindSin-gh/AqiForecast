@@ -5,18 +5,18 @@ stages:
     outs:
     - path: data/raw/observations.parquet
       hash: md5
-      md5: a4aec92155b33ac2dead36fc13728058
-      size: 2148047
+      md5: de1707ca09575e8a817b2ecaea14e63d
+      size: 2148772
   features:
     cmd: python -m src.features.build
     deps:
     - path: data/raw/observations.parquet
       hash: md5
-      md5: a4aec92155b33ac2dead36fc13728058
-      size: 2148047
+      md5: de1707ca09575e8a817b2ecaea14e63d
+      size: 2148772
     - path: src/features
       hash: md5
-      md5: 44dae77639b6d65a2d859da251435034.dir
+      md5: 9985dba0e7a92b00b7820ab462b2afdd.dir
       size: 18086
       nfiles: 7
     params:
@@ -64,20 +64,20 @@ stages:
     outs:
     - path: data/processed
       hash: md5
-      md5: 8e2204e383bea31e7620458140953570.dir
-      size: 253183152
+      md5: 3924081fcb1d9c3408a3e3e3065e261f.dir
+      size: 253277033
       nfiles: 4
   train:
     cmd: python -m src.models.train
     deps:
     - path: data/processed
       hash: md5
-      md5: 8e2204e383bea31e7620458140953570.dir
-      size: 253183152
+      md5: 3924081fcb1d9c3408a3e3e3065e261f.dir
+      size: 253277033
       nfiles: 4
     - path: src/models
       hash: md5
-      md5: 484eb8f6912103171ceda72af225ed3d.dir
+      md5: b9cdf6d76acf45a02fda2a78d9a81c4f.dir
       size: 29098
       nfiles: 12
     params:
@@ -95,9 +95,9 @@ stages:
     outs:
     - path: models/candidate.pt
       hash: md5
-      md5: ece3f1e40c55684ed7cb8d3563574630
+      md5: e4291691c418d76baa04aeba546f9897
       size: 245668
     - path: reports/metrics.json
       hash: md5
-      md5: c8db30e7d27b8d7c3fcb0a6c5b19ef8c
-      size: 553
+      md5: c6708ecff38fcfc194f98ec74619665b
+      size: 552
